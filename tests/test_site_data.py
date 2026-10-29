@@ -201,14 +201,15 @@ class SeedHistoryTests(unittest.TestCase):
         ):
             self.assertIn(expected, names)
         document = build_document(ROOT)
-        offer = next(row for row in document["offers"]["2a3c|2|RO|1"] if row["date"] == "2026-12-15")
-        self.assertEqual(offer["none"], 1579.16)
-        self.assertEqual(document["status"]["grids"]["2a3c"]["last_scan_label"], "28/10 08:56")
-        self.assertEqual(document["status"]["grids"]["4a1c-mhot"]["last_scan_label"], "28/10 13:48")
         series = document["history"]["2a3c|2|RO|1"]["2026-12-15"]["none"]
         self.assertGreaterEqual(len(series), 3)
+        seeded = next(point for point in series if point["at"].startswith("2026-10-28T06:56:06"))
+        self.assertEqual(seeded["price"], 1579.16)
+        self.assertEqual(seeded["label"], "28/10 08:56")
         self.assertTrue(any(point["label"].startswith("26/10") for point in series))
-        self.assertTrue(any(point["label"].startswith("28/10") for point in series))
+        # Later scrapes append snapshots; the page's "last scan" is the newest one, not a frozen date.
+        self.assertGreaterEqual(document["status"]["grids"]["2a3c"]["last_scan_at"], "2026-10-28T06:56:06.202971Z")
+        self.assertGreaterEqual(document["status"]["grids"]["4a1c-mhot"]["last_scan_at"], "2026-10-28T11:48:22.250961Z")
 
 
 class WriteTests(unittest.TestCase):
