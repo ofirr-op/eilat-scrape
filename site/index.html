@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6f8">
+  <title>מועדון הוטלס אילת: החופשות המשפחתיות הכי זולות</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="page-head">
+    <h1>מועדון הוטלס אילת: החופשות המשפחתיות הכי זולות</h1>
+    <p id="summary" class="summary">המחיר הזול לכל יום כניסה, מבין המחיר הרגיל והמחיר עם קוד mhot.</p>
+  </header>
+
+  <section id="status" class="panel" aria-live="polite"></section>
+
+  <section class="panel" id="filters">
+    <h2>סינון</h2>
+    <div class="filters">
+      <label>הרכב המשפחה
+        <select id="party"></select>
+      </label>
+      <label>מספר לילות
+        <select id="nights">
+          <option value="2">2 לילות</option>
+          <option value="3" selected>3 לילות</option>
+          <option value="4">4 לילות</option>
+        </select>
+      </label>
+      <label>ארוחות
+        <select id="board"></select>
+      </label>
+      <label>מספר חדרים
+        <select id="rooms">
+          <option value="1" selected>חדר אחד</option>
+          <option value="2">2 חדרים</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel" id="best"></section>
+  <section class="panel" id="top"></section>
+  <section class="panel" id="bars"></section>
+  <section class="panel" id="matrix"></section>
+  <section class="panel note" id="about"></section>
+  <section class="panel" id="calendar-wrap">
+    <h2>לוח שנה: מחיר ללילה לפי יום כניסה</h2>
+    <div id="calendar"></div>
+  </section>
+
+  <div id="backdrop" hidden></div>
+  <div id="card" role="dialog" aria-label="היסטוריית מחיר" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -36,6 +36,16 @@ Each directory receives `results.csv`, `results.json`, `offers.csv`, and `report
 
 בכל תיקייה נשמרים `results.csv`, `results.json`, `offers.csv` ו-`report.html`. צילום היסטוריה אחד לכל רשת (`*.csv.gz`) נוסף תחת `output/history/runs/`.
 
+## Price page / עמוד המחירים
+
+The same workflow publishes a Hebrew, phone-first page at <https://ofirr-op.github.io/eilat-scrape/>. After the results are committed it builds `site/` from `output/history/runs/*.csv.gz` and the current result files, then deploys with GitHub Pages. At the start of a run it commits `output/status.json` (`running`, with `started_at` and the grids in this run) so the page can show that a scan is in progress. A failed grid keeps the error text from the scraper log.
+
+GitHub Pages has to be switched on once: **Settings → Pages → Build and deployment → Source: GitHub Actions**. The workflow token cannot flip that setting.
+
+אותו workflow מפרסם עמוד בעברית, מותאם לטלפון, בכתובת <https://ofirr-op.github.io/eilat-scrape/>. אחרי שהתוצאות נשמרות הוא בונה את `site/` מ־`output/history/runs/*.csv.gz` ומקבצי התוצאות, ומפרסם ל־GitHub Pages. בתחילת ריצה נשמר `output/status.json` (מצב `running`, עם `started_at` והרשתות של הריצה) כדי שהעמוד יראה שסריקה רצה. רשת שנכשלה שומרת את טקסט השגיאה מהלוג.
+
+צריך להפעיל את GitHub Pages פעם אחת: **Settings → Pages → Build and deployment → Source: GitHub Actions**. הטוקן של ה-workflow לא יכול לשנות את ההגדרה הזו.
+
 The marketing page at <https://m.clubhotels.co.il/club-hotel-eilat?r=1> does not contain prices. Its booking widget (`Scripts/EngineScriptsV2/BE_Engine.min.js`) submits a search to the ASP.NET page the engine calls **RoomsPage**:
 
 ```
