@@ -31,6 +31,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 # One scrape at a time. A second run waits; it does not cancel the run
 # that is already fetching prices. The publish job still rebases before
@@ -75,6 +77,73 @@ jobs:
           fi
           echo "matrix=${json}" >> "${GITHUB_OUTPUT}"
 
+  # Commit a running status before the grids finish, so the Pages site can
+  # show the scan in progress. pages.yml deploys that commit. This job does
+  # not cancel or wait on a scrape that is already running.
+  mark-running:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v7
+        with:
+          path: workflow-src
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          path: main
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Mark the scan as running
+        env:
+          MATRIX: ${{ needs.test.outputs.matrix }}
+        run: |
+          set -euo pipefail
+          grids="$(python -c 'import json,os; print(",".join(item["grid"] for item in json.loads(os.environ["MATRIX"])))')"
+          note=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            note="(סריקה ידנית)"
+          fi
+          PYTHONPATH="${GITHUB_WORKSPACE}/workflow-src" python -m scrape.site_data mark-running \
+            --status "${GITHUB_WORKSPACE}/main/output/status.json" \
+            --started-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --grids "${grids}" \
+            --note "${note}"
+      - name: Commit running status
+        working-directory: main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/status.json
+          if git diff --cached --quiet; then
+            echo "Status already current"
+            exit 0
+          fi
+          git commit -m "Mark Club Hotel Eilat scrape as running" \
+            -m "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          for attempt in 1 2 3 4 5; do
+            if [[ -d .git/rebase-merge || -d .git/rebase-apply ]]; then
+              git rebase --abort
+            fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git checkout --theirs -- output/status.json
+              git add output/status.json
+              GIT_EDITOR=true git rebase --continue
+            fi
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "Could not push running status" >&2
+          exit 1
+
   scrape:
     needs: test
     runs-on: ubuntu-latest
@@ -105,13 +174,19 @@ jobs:
           esac
           mkdir -p output/history/runs
           find output/history/runs -maxdepth 1 -name '*.csv.gz' -printf '%f\n' | sort > /tmp/history-before.txt
+          set +e
           python -m scrape \
             --party "${PARTY}" \
             --promo "${PROMO}" \
             --output output/eilat \
             --history output/history \
             --refresh \
-            --transport auto
+            --transport auto 2>&1 | tee "${RUNNER_TEMP}/scrape.log"
+          code="${PIPESTATUS[0]}"
+          set -e
+          if [[ "${code}" -ne 0 ]]; then
+            exit "${code}"
+          fi
           find output/history/runs -maxdepth 1 -name '*.csv.gz' -printf '%f\n' | sort > /tmp/history-after.txt
           pack="${RUNNER_TEMP}/pack"
           rm -rf "${pack}"
@@ -132,6 +207,24 @@ jobs:
           name: grid-${{ matrix.grid }}
           path: ${{ runner.temp }}/pack
           if-no-files-found: error
+          retention-days: 14
+      - name: Record a failed grid
+        if: failure()
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/fail"
+          if [[ -f "${RUNNER_TEMP}/scrape.log" ]]; then
+            tail -n 30 "${RUNNER_TEMP}/scrape.log" > "${RUNNER_TEMP}/fail/error.txt"
+          else
+            echo "הסריקה נכשלה לפני שכתבה תוצאות" > "${RUNNER_TEMP}/fail/error.txt"
+          fi
+      - name: Upload ${{ matrix.grid }} error
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: grid-${{ matrix.grid }}-error
+          path: ${{ runner.temp }}/fail/error.txt
+          if-no-files-found: ignore
           retention-days: 14
 
   publish:
@@ -201,6 +294,59 @@ jobs:
             script="${GITHUB_WORKSPACE}/main/.github/scripts/publish-grids.sh"
           fi
           bash "${script}" "${GITHUB_WORKSPACE}/artifacts" "${GITHUB_WORKSPACE}/main"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Download 2a3c error
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '2a3c'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: grid-2a3c-error
+          path: errors/2a3c
+      - name: Download 2a3c-mhot error
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '2a3c-mhot'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: grid-2a3c-mhot-error
+          path: errors/2a3c-mhot
+      - name: Download 4a1c error
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '4a1c'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: grid-4a1c-error
+          path: errors/4a1c
+      - name: Download 4a1c-mhot error
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '4a1c-mhot'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: grid-4a1c-mhot-error
+          path: errors/4a1c-mhot
+      - name: Write finished scan status
+        env:
+          MATRIX: ${{ needs.test.outputs.matrix }}
+        run: |
+          set -euo pipefail
+          mapfile -t grids < <(python -c 'import json,os; print("\n".join(item["grid"] for item in json.loads(os.environ["MATRIX"])))')
+          args=()
+          for grid in "${grids[@]}"; do
+            if [[ -d "${GITHUB_WORKSPACE}/artifacts/grid-${grid}/files" ]]; then
+              continue
+            fi
+            reason="הסריקה נכשלה לפני שכתבה תוצאות"
+            if [[ -f "${GITHUB_WORKSPACE}/errors/${grid}/error.txt" ]]; then
+              reason="@${GITHUB_WORKSPACE}/errors/${grid}/error.txt"
+            fi
+            args+=(--failed "${grid}=${reason}")
+          done
+          PYTHONPATH="${GITHUB_WORKSPACE}/workflow-src" python -m scrape.site_data mark-finished \
+            --status "${GITHUB_WORKSPACE}/main/output/status.json" \
+            --finished-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --grids "$(IFS=,; echo "${grids[*]}")" \
+            "${args[@]}"
       - name: Commit and push to main
         working-directory: main
         run: |
@@ -240,3 +386,31 @@ jobs:
           done
           echo "Could not push to main" >&2
           exit 1
+      - name: Build the price page
+        run: |
+          set -euo pipefail
+          rm -rf "${GITHUB_WORKSPACE}/_site"
+          mkdir -p "${GITHUB_WORKSPACE}/_site"
+          cp -a "${GITHUB_WORKSPACE}/workflow-src/site/." "${GITHUB_WORKSPACE}/_site/"
+          rm -f "${GITHUB_WORKSPACE}/_site/data.json"
+          PYTHONPATH="${GITHUB_WORKSPACE}/workflow-src" python -m scrape.site_data build \
+            --root "${GITHUB_WORKSPACE}/main" \
+            --dest "${GITHUB_WORKSPACE}/_site/data.json"
+          test -s "${GITHUB_WORKSPACE}/_site/index.html"
+          test -s "${GITHUB_WORKSPACE}/_site/data.json"
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: publish
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
