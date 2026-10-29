@@ -17,11 +17,12 @@ import csv
 import gzip
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from scrape.history import normalize_scraped_at
+from scrape.holidays import holidays_between
 
 ISRAEL = ZoneInfo("Asia/Jerusalem")
 BOOKING_BASE = "https://m.clubhotels.co.il/BE_Rooms.aspx"
@@ -255,6 +256,7 @@ def build_document(repo: Path, *, status_path: Path | None = None) -> dict:
         },
         "offers": offers,
         "history": history_out,
+        "holidays": _holidays_for_window(first, last),
     }
 
 
@@ -449,6 +451,19 @@ def _cell(
     if snap is None:
         return None
     return snap.cells.get((nights, board, rooms, check_in))
+
+
+def _holidays_for_window(first: str | None, last: str | None) -> dict:
+    """Israeli Jewish holidays for every day of the months on the calendar."""
+    if not first or not last:
+        return {}
+    start = date(int(first[:4]), int(first[5:7]), 1)
+    year, month = int(last[:4]), int(last[5:7])
+    if month == 12:
+        end = date(year, 12, 31)
+    else:
+        end = date(year, month + 1, 1) - timedelta(days=1)
+    return holidays_between(start, end)
 
 
 def _months(first: str | None, last: str | None) -> list[dict]:

@@ -250,6 +250,37 @@ th { color: var(--muted); font-weight: 650; }
   cursor: default;
 }
 
+.day.hol { min-height: 76px; box-shadow: inset 0 0 0 2px #e6c56a; }
+.day.hol-chag { box-shadow: inset 0 0 0 2px #c4892a; }
+.day.hol-chol { box-shadow: inset 0 0 0 2px #d7b56a; }
+.day.hol-modern { box-shadow: inset 0 0 0 2px #7aa2d4; }
+.day.hol-erev { box-shadow: inset 0 0 0 1px #e0c98a; }
+.day.empty.hol-chag,
+.day.empty.hol-minor,
+.day.empty.hol-modern,
+.day.empty.hol-chol { background: #fff8ea; }
+.day.empty.hol-erev { background: #fbf8f1; }
+
+.holiday-name {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.62rem;
+  line-height: 1.15;
+  font-weight: 750;
+  color: #8a5a12;
+  max-height: 2.3em;
+  overflow: hidden;
+}
+
+.day.hol-modern .holiday-name { color: #1d4e89; }
+.day.hol-erev .holiday-name { color: #8a6a3b; font-weight: 650; }
+
+.card-holiday {
+  font-weight: 750;
+  color: #7a3e08;
+  margin: 2px 0 4px;
+}
+
 .day .price { font-size: 0.82rem; font-weight: 750; }
 
 .day .price.mhot, .mhot { color: var(--red); }

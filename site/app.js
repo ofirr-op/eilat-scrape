@@ -331,21 +331,42 @@
       '<div class="days">' + cells + "</div></section>";
   }
 
+  function holidayOf(date) {
+    return (data.holidays && data.holidays[date]) || null;
+  }
+
+  function holidayClass(date) {
+    const holiday = holidayOf(date);
+    return holiday ? " hol hol-" + holiday.kind : "";
+  }
+
+  function holidayMark(date) {
+    const holiday = holidayOf(date);
+    if (!holiday) return "";
+    return '<span class="holiday-name">' + escapeText(holiday.name) + "</span>";
+  }
+
   function dayHtml(date, day, s, byDate, lo, hi) {
     const offer = byDate[date];
     const had = points(s, date, "none").some((p) => p.price != null) || points(s, date, "mhot").some((p) => p.price != null);
+    const klass = holidayClass(date);
+    const name = holidayMark(date);
     if (!offer && had) {
-      return '<div class="day past" data-date="' + date + '" tabindex="0">' + day + "</div>";
+      return '<div class="day past' + klass + '" data-date="' + date + '" tabindex="0"><span class="top"><span>' +
+        day + "</span></span>" + name + "</div>";
     }
-    if (!offer) return '<div class="day empty">' + day + "</div>";
+    if (!offer) {
+      const open = holidayOf(date) ? ' data-date="' + date + '" tabindex="0"' : "";
+      return '<div class="day empty' + klass + '"' + open + '><span class="top"><span>' + day + "</span></span>" + name + "</div>";
+    }
     const t = hi === lo ? 0 : (offer.per_night - lo) / (hi - lo);
     const color = heatColor(t);
     const tr = trend(s.party, offer.use_mhot, s, date);
     const mark = tr ? '<span class="' + tr.kind + '">' + (tr.kind === "up" ? "▲" : tr.kind === "down" ? "▼" : "▬") + "</span>" : "";
-    return '<a class="day" data-date="' + date + '" href="' + offer.url + '" target="_blank" rel="noopener noreferrer" style="background:' +
+    return '<a class="day' + klass + '" data-date="' + date + '" href="' + offer.url + '" target="_blank" rel="noopener noreferrer" style="background:' +
       color + '22;border-bottom:3px solid ' + color + '"><span class="top"><span>' + day + "</span>" + mark +
       '</span><span class="price' + (offer.use_mhot ? " mhot" : "") + '">' + fmt(offer.per_night) + " ₪" +
-      (offer.use_mhot ? ' <span class="mhot">mhot</span>' : "") + "</span></a>";
+      (offer.use_mhot ? ' <span class="mhot">mhot</span>' : "") + "</span>" + name + "</a>";
   }
 
   function refresh() {
@@ -431,7 +452,9 @@
     const mhot = points(s, date, "mhot");
     const both = none.concat(mhot);
     const avail = both.filter((p) => p.price != null);
+    const holiday = holidayOf(date);
     let html = "<strong>כניסה ב־" + dmyFull(date) + "</strong>";
+    if (holiday) html += '<div class="card-holiday">' + escapeText(holiday.name) + "</div>";
     if (offer) {
       html += '<div><span class="dot" style="background:' + BLUE + '"></span>מחיר רגיל: ' +
         (offer.none == null ? "לא זמין" : fmt(offer.none) + " ₪") + "</div>";
