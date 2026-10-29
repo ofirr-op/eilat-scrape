@@ -1,0 +1,13 @@
+[project]
+name = "scrape"
+version = "1.0.0"
+description = "Cheapest Club Hotel Eilat stays from the official booking engine."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+scrape = "scrape.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["scrape*"]

@@ -1,0 +1,236 @@
+# Daily Club Hotel Eilat price scrape.
+#
+# Cron is 06:00 UTC: 08:00 Israel Standard Time (winter, UTC+2). During
+# Israel Daylight Time (summer, UTC+3) that same UTC instant is 09:00 in
+# Israel. GitHub cron does not follow daylight saving time.
+#
+# Four grids run as separate matrix jobs (about an hour each) so none of
+# them approaches the 6-hour job limit. A final job copies their CSV/JSON
+# reports and history snapshots onto main and pushes with GITHUB_TOKEN.
+# No repository secrets are used. --transport auto is the scraper default:
+# direct fetch, then r.jina.ai if Cloudflare blocks the runner IP.
+
+name: Scrape Club Hotel Eilat
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      grid:
+        description: Which price grid to scrape
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - 2a3c
+          - 2a3c-mhot
+          - 4a1c
+          - 4a1c-mhot
+
+permissions:
+  contents: write
+
+# One scrape at a time. A second run waits; it does not cancel the run
+# that is already fetching prices. The publish job still rebases before
+# push in case main moved for another reason.
+concurrency:
+  group: eilat-scrape
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+  scrape:
+    needs: test
+    runs-on: ubuntu-latest
+    # A grid is about an hour. 330 minutes stays under the 6-hour job cap.
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - grid: 2a3c
+            party: 2a3c
+            promo: none
+          - grid: 2a3c-mhot
+            party: 2a3c
+            promo: mhot
+          - grid: 4a1c
+            party: 4a1c
+            promo: none
+          - grid: 4a1c-mhot
+            party: 4a1c
+            promo: mhot
+    # schedule, and workflow_dispatch with grid=all, run every cell.
+    # A single choice runs only that cell; the other cells are skipped.
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.grid == 'all' ||
+      github.event.inputs.grid == matrix.grid
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Scrape ${{ matrix.grid }}
+        env:
+          GRID: ${{ matrix.grid }}
+          PARTY: ${{ matrix.party }}
+          PROMO: ${{ matrix.promo }}
+        run: |
+          set -euo pipefail
+          case "${GRID}" in
+            2a3c) src="output/eilat" ;;
+            2a3c-mhot) src="output/eilat/promo-mhot" ;;
+            4a1c) src="output/eilat/party-4a1c" ;;
+            4a1c-mhot) src="output/eilat/party-4a1c/promo-mhot" ;;
+            *) echo "unknown grid: ${GRID}" >&2; exit 1 ;;
+          esac
+          mkdir -p output/history/runs
+          find output/history/runs -maxdepth 1 -name '*.csv.gz' -printf '%f\n' | sort > /tmp/history-before.txt
+          python -m scrape \
+            --party "${PARTY}" \
+            --promo "${PROMO}" \
+            --output output/eilat \
+            --history output/history \
+            --refresh \
+            --transport auto
+          find output/history/runs -maxdepth 1 -name '*.csv.gz' -printf '%f\n' | sort > /tmp/history-after.txt
+          pack="${RUNNER_TEMP}/pack"
+          rm -rf "${pack}"
+          mkdir -p "${pack}/files" "${pack}/history"
+          find "${src}" -maxdepth 1 -type f -exec cp -a {} "${pack}/files/" \;
+          comm -13 /tmp/history-before.txt /tmp/history-after.txt | while IFS= read -r name; do
+            [[ -n "${name}" ]] || continue
+            cp -a "output/history/runs/${name}" "${pack}/history/"
+          done
+          test -s "${pack}/files/results.csv"
+          test -s "${pack}/files/results.json"
+          test -s "${pack}/files/offers.csv"
+          test -s "${pack}/files/report.html"
+          compgen -G "${pack}/history/*.csv.gz" > /dev/null
+      - name: Upload ${{ matrix.grid }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: grid-${{ matrix.grid }}
+          path: ${{ runner.temp }}/pack
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [test, scrape]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Commit whichever grids finished. A failed matrix still fails the
+    # workflow; successful siblings are still saved.
+    if: >-
+      always() &&
+      needs.test.result == 'success' &&
+      (needs.scrape.result == 'success' || needs.scrape.result == 'failure')
+    steps:
+      # The running commit supplies publish-grids.sh. main is a second
+      # checkout so the price commit is based on main even when this
+      # workflow was dispatched from another branch.
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v7
+        with:
+          path: workflow-src
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          path: main
+      # Named downloads (not a pattern) so one grid and four grids land in
+      # the same artifacts/grid-<id>/ layout. A grid that did not run has
+      # no artifact; that download is skipped. A grid that ran and failed
+      # is attempted and ignored so the grids that finished can still publish.
+      - name: Download 2a3c
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '2a3c'
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: grid-2a3c
+          path: artifacts/grid-2a3c
+      - name: Download 2a3c-mhot
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '2a3c-mhot'
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: grid-2a3c-mhot
+          path: artifacts/grid-2a3c-mhot
+      - name: Download 4a1c
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '4a1c'
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: grid-4a1c
+          path: artifacts/grid-4a1c
+      - name: Download 4a1c-mhot
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.grid == 'all' || github.event.inputs.grid == '4a1c-mhot'
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: grid-4a1c-mhot
+          path: artifacts/grid-4a1c-mhot
+      - name: Merge grids into the checkout
+        # Publish checks out main, which may not yet contain this script
+        # when the workflow is dispatched from another branch. The script
+        # is taken from the commit that is running.
+        run: |
+          set -euo pipefail
+          script="${GITHUB_WORKSPACE}/workflow-src/.github/scripts/publish-grids.sh"
+          if [[ ! -f "${script}" ]]; then
+            script="${GITHUB_WORKSPACE}/main/.github/scripts/publish-grids.sh"
+          fi
+          bash "${script}" "${GITHUB_WORKSPACE}/artifacts" "${GITHUB_WORKSPACE}/main"
+      - name: Commit and push to main
+        working-directory: main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output
+          if git diff --cached --quiet; then
+            echo "No output changes to commit"
+            exit 0
+          fi
+          grids="$(find "${GITHUB_WORKSPACE}/artifacts" -mindepth 2 -maxdepth 2 -type d -name files -printf '%h\n' | xargs -n1 basename | sed 's/^grid-//' | sort | paste -sd, -)"
+          git commit -m "Update Club Hotel Eilat prices (${grids})" \
+            -m "Automated scrape. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          for attempt in 1 2 3 4 5; do
+            if [[ -d .git/rebase-merge || -d .git/rebase-apply ]]; then
+              git rebase --abort
+            fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              # During rebase, --theirs is this commit (the new prices).
+              git checkout --theirs -- output
+              git add output
+              if ! GIT_EDITOR=true git rebase --continue; then
+                git rebase --abort || true
+                echo "Rebase could not continue on attempt ${attempt}" >&2
+                sleep $((attempt * 5))
+                continue
+              fi
+            fi
+            if git push origin HEAD:main; then
+              echo "Pushed price update to main"
+              exit 0
+            fi
+            echo "Push rejected on attempt ${attempt}; retrying after rebase"
+            sleep $((attempt * 5))
+          done
+          echo "Could not push to main" >&2
+          exit 1
