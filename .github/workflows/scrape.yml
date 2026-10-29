@@ -43,6 +43,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.grids.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -50,6 +52,28 @@ jobs:
           python-version: "3.12"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      # Job-level if cannot read matrix, so the chosen grids are computed
+      # here and passed in as the matrix. schedule and grid=all run all four.
+      - name: Choose grids
+        id: grids
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GRID: ${{ github.event.inputs.grid }}
+        run: |
+          set -euo pipefail
+          all='[{"grid":"2a3c","party":"2a3c","promo":"none"},{"grid":"2a3c-mhot","party":"2a3c","promo":"mhot"},{"grid":"4a1c","party":"4a1c","promo":"none"},{"grid":"4a1c-mhot","party":"4a1c","promo":"mhot"}]'
+          if [[ "${EVENT_NAME}" != "workflow_dispatch" || "${GRID}" == "all" || -z "${GRID}" ]]; then
+            json="${all}"
+          else
+            case "${GRID}" in
+              2a3c) json='[{"grid":"2a3c","party":"2a3c","promo":"none"}]' ;;
+              2a3c-mhot) json='[{"grid":"2a3c-mhot","party":"2a3c","promo":"mhot"}]' ;;
+              4a1c) json='[{"grid":"4a1c","party":"4a1c","promo":"none"}]' ;;
+              4a1c-mhot) json='[{"grid":"4a1c-mhot","party":"4a1c","promo":"mhot"}]' ;;
+              *) echo "Unknown grid: ${GRID}" >&2; exit 1 ;;
+            esac
+          fi
+          echo "matrix=${json}" >> "${GITHUB_OUTPUT}"
 
   scrape:
     needs: test
@@ -59,25 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - grid: 2a3c
-            party: 2a3c
-            promo: none
-          - grid: 2a3c-mhot
-            party: 2a3c
-            promo: mhot
-          - grid: 4a1c
-            party: 4a1c
-            promo: none
-          - grid: 4a1c-mhot
-            party: 4a1c
-            promo: mhot
-    # schedule, and workflow_dispatch with grid=all, run every cell.
-    # A single choice runs only that cell; the other cells are skipped.
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.grid == 'all' ||
-      github.event.inputs.grid == matrix.grid
+        include: ${{ fromJSON(needs.test.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
