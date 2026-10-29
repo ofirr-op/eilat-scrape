@@ -12,6 +12,7 @@
   let pressStart = null;
   let pressFiredFor = null;
   let touchDay = null;
+  let hideTimer = null;
 
   const $ = (id) => document.getElementById(id);
 
@@ -367,6 +368,7 @@
     $("card").dataset.date = date;
     $("card").innerHTML = chartHtml(s, date, offer);
     $("card").hidden = false;
+    cancelHide();
     placeCard(day.getBoundingClientRect());
     if (pin) {
       pinned = date;
@@ -374,7 +376,26 @@
     }
   }
 
+  function cancelHide() {
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+
+  function scheduleHide() {
+    if (pinned) return;
+    cancelHide();
+    // The card sits a few pixels away from the day. Keep it open long enough
+    // for the pointer to cross that gap and land on the booking link.
+    hideTimer = setTimeout(() => {
+      hideTimer = null;
+      if (!pinned) hideCard();
+    }, 300);
+  }
+
   function hideCard() {
+    cancelHide();
     pinned = null;
     $("card").hidden = true;
     $("backdrop").hidden = true;
@@ -390,16 +411,18 @@
     const headerH = 52;
     const spaceBelow = vh - rect.bottom - 12;
     const spaceAbove = rect.top - headerH - 12;
-    const down = spaceBelow >= 240 || spaceBelow >= spaceAbove;
+    const down = spaceBelow >= 280 || spaceBelow >= spaceAbove;
     card.style.left = left + "px";
+    // Overlap the day by a few pixels so the pointer never falls in a gap
+    // between the cell and the booking link.
     if (down) {
-      card.style.top = (rect.bottom + 8) + "px";
+      card.style.top = (rect.bottom - 6) + "px";
       card.style.bottom = "auto";
-      card.style.maxHeight = Math.max(140, Math.min(spaceBelow, vh * 0.7)) + "px";
+      card.style.maxHeight = Math.max(180, Math.min(spaceBelow + 6, vh * 0.72)) + "px";
     } else {
       card.style.top = "auto";
-      card.style.bottom = (vh - rect.top + 8) + "px";
-      card.style.maxHeight = Math.max(140, Math.min(spaceAbove, vh * 0.7)) + "px";
+      card.style.bottom = (vh - rect.top - 6) + "px";
+      card.style.maxHeight = Math.max(180, Math.min(spaceAbove + 6, vh * 0.72)) + "px";
     }
   }
 
@@ -416,6 +439,7 @@
         (offer.mhot == null ? "לא זמין" : fmt(offer.mhot) + " ₪") + "</div>";
       html += "<strong>הזול: " + fmt(offer.total) + " ₪ ל־" + s.nights + " לילות (" + fmt(offer.per_night) +
         " ₪ ללילה), " + (offer.use_mhot ? "עם קוד mhot" : "מחיר רגיל") + "</strong>";
+      html += bookingLink(offer);
     } else {
       html += "<div>אין זמינות בסריקה האחרונה.</div>";
     }
@@ -432,6 +456,13 @@
     }
     if (both.some((p) => p.price == null)) html += '<div class="hint">עיגול ריק בתחתית הגרף = לא זמין באותה סריקה.</div>';
     return html;
+  }
+
+  function bookingLink(offer) {
+    const which = offer.use_mhot ? "עם mhot" : "מחיר רגיל";
+    const kind = offer.use_mhot ? "mhot" : "regular";
+    return '<a class="book-link ' + kind + '" href="' + offer.url + '" target="_blank" rel="noopener noreferrer">' +
+      "להזמנה באתר מועדון הוטלס – " + fmt(offer.total) + " ₪ (" + which + ")</a>";
   }
 
   function changeText(none) {
@@ -575,8 +606,11 @@
       const day = event.target.closest("[data-date]");
       if (!day || pinned) return;
       const next = event.relatedTarget;
-      if (next && (day.contains(next) || (next.closest && next.closest("#card")))) return;
-      hideCard();
+      if (next && (day.contains(next) || (next.closest && next.closest("#card")))) {
+        cancelHide();
+        return;
+      }
+      scheduleHide();
     });
     calendar.addEventListener("pointerdown", (event) => {
       const day = event.target.closest("[data-date]");
@@ -602,8 +636,12 @@
       openCard(day, true);
     });
     $("backdrop").addEventListener("click", hideCard);
+    $("card").addEventListener("mouseenter", cancelHide);
     $("card").addEventListener("mouseleave", () => {
-      if (!pinned) hideCard();
+      if (!pinned) scheduleHide();
+    });
+    $("card").addEventListener("click", (event) => {
+      if (event.target.closest("a.book-link")) event.stopPropagation();
     });
     window.addEventListener("scroll", () => {
       if (!$("card").hidden) {
