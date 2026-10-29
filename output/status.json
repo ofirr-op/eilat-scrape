@@ -1,0 +1,37 @@
+{
+  "run_state": "running",
+  "started_at": "2026-10-29T16:01:51Z",
+  "finished_at": null,
+  "error": null,
+  "note": "(סריקה ידנית)",
+  "grids": {
+    "2a3c": {
+      "state": "running",
+      "started_at": "2026-10-29T16:01:51Z",
+      "finished_at": null,
+      "error": null,
+      "last_scan_at": null
+    },
+    "2a3c-mhot": {
+      "state": "running",
+      "started_at": "2026-10-29T16:01:51Z",
+      "finished_at": null,
+      "error": null,
+      "last_scan_at": null
+    },
+    "4a1c": {
+      "state": "running",
+      "started_at": "2026-10-29T16:01:51Z",
+      "finished_at": null,
+      "error": null,
+      "last_scan_at": null
+    },
+    "4a1c-mhot": {
+      "state": "running",
+      "started_at": "2026-10-29T16:01:51Z",
+      "finished_at": null,
+      "error": null,
+      "last_scan_at": null
+    }
+  }
+}
