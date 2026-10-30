@@ -6,7 +6,7 @@ Find Club Hotel Eilat prices for 2, 3 and 4 nights, each board basis, and one or
 
 This repo runs itself on GitHub Actions (`.github/workflows/scrape.yml`). No extra secrets: the workflow uses `GITHUB_TOKEN` only. Each grid is its own job, so a full day stays inside the per-job time limit. A last job merges the finished files and pushes them to `main`.
 
-**Schedule.** Cron is `0 6 * * *` UTC. That is **08:00 Israel Standard Time** (winter, UTC+2). During Israel Daylight Time (summer, UTC+3, roughly late March through late October) the same cron is **09:00** in Israel. GitHub cron is UTC only and does not move with daylight saving time.
+**Schedule.** The primary cron is `17 5 * * *` UTC: **07:17 Israel Standard Time** (winter, UTC+2), and **08:17** during Israel Daylight Time (summer, UTC+3). The minute is not 0, because GitHub often drops a schedule that fires at the top of the hour. If that run did not succeed, two backups try later the same day: `43 8 * * *` UTC (**10:43** winter / **11:43** summer) and `29 11 * * *` UTC (**13:29** winter / **14:29** summer). A backup does not scrape when a run on `main` already succeeded, or is still queued or running, on today's Israel date. A manual run always scrapes. GitHub cron is UTC only and does not move with daylight saving time.
 
 **Run one scan by hand.** Open the **Actions** tab, choose **Scrape Club Hotel Eilat**, click **Run workflow**, leave the branch on `main`, and pick a **grid**:
 
@@ -22,7 +22,7 @@ Each directory receives `results.csv`, `results.json`, `offers.csv`, and `report
 
 המאגר מריץ את עצמו ב-GitHub Actions (`.github/workflows/scrape.yml`). אין סודות נוספים: ה-workflow משתמש רק ב-`GITHUB_TOKEN`. כל רשת רצה כ-job נפרד, ועבודה אחרונה מאחדת את הקבצים ודוחפת אותם ל-`main`.
 
-**לוח זמנים.** ה-cron הוא `0 6 * * *` לפי UTC. זו השעה **08:00** לפי שעון ישראל בחורף (UTC+2). בשעון קיץ (UTC+3, בערך מסוף מרץ עד סוף אוקטובר) אותה הרצה היא **09:00** בישראל. ה-cron של GitHub הוא UTC בלבד ולא זז עם שעון הקיץ.
+**לוח זמנים.** ה-cron הראשי הוא `17 5 * * *` לפי UTC: **07:17** שעון ישראל בחורף (UTC+2), ו־**08:17** בשעון קיץ (UTC+3). הדקה אינה 0, כי GitHub לפעמים מדלג על תזמון שנופל בדיוק בראש השעה. אם הריצה הזו לא הצליחה, יש שני גיבויים באותו יום: `43 8 * * *` UTC (**10:43** בחורף / **11:43** בקיץ) ו־`29 11 * * *` UTC (**13:29** בחורף / **14:29** בקיץ). גיבוי לא סורק אם ב־`main` כבר יש ריצה שהצליחה, או שהיא עדיין בתור או רצה, לפי התאריך של היום בשעון ישראל. הרצה ידנית תמיד סורקת. ה-cron של GitHub הוא UTC בלבד ולא זז עם שעון הקיץ.
 
 **הרצה ידנית של סריקה אחת.** נכנסים ללשונית **Actions**, בוחרים **Scrape Club Hotel Eilat**, לוחצים **Run workflow**, משאירים את הענף על `main`, ובוחרים **grid**:
 
