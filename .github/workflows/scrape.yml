@@ -1,8 +1,15 @@
 # Daily Club Hotel Eilat price scrape.
 #
-# Cron is 06:00 UTC: 08:00 Israel Standard Time (winter, UTC+2). During
-# Israel Daylight Time (summer, UTC+3) that same UTC instant is 09:00 in
-# Israel. GitHub cron does not follow daylight saving time.
+# Primary cron is 05:17 UTC, which is 07:17 Israel Standard Time (winter,
+# UTC+2) and 08:17 during Israel Daylight Time (summer, UTC+3). The minute
+# is not 0: GitHub often drops or delays schedules that fire at the top of
+# the hour (the 06:00 UTC cron did not run at all on 2026-10-30).
+#
+# Two later crons the same morning are backups. A schedule run whose gate
+# sees a successful, queued, or in-progress scrape already started today
+# (Asia/Jerusalem) skips tests, the matrix, and the status commit.
+# workflow_dispatch always scrapes. GitHub cron stays on UTC and does not
+# follow daylight saving time.
 #
 # Four grids run as separate matrix jobs (about an hour each) so none of
 # them approaches the 6-hour job limit. A final job copies their CSV/JSON
@@ -14,7 +21,12 @@ name: Scrape Club Hotel Eilat
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    # 05:17 UTC = 07:17 IST (winter) / 08:17 IDT (summer).
+    - cron: "17 5 * * *"
+    # Backup: 08:43 UTC = 10:43 IST / 11:43 IDT.
+    - cron: "43 8 * * *"
+    # Backup: 11:29 UTC = 13:29 IST / 14:29 IDT.
+    - cron: "29 11 * * *"
   workflow_dispatch:
     inputs:
       grid:
@@ -30,6 +42,7 @@ on:
           - 4a1c-mhot
 
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -42,7 +55,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Schedule backups stop here when today's scrape already succeeded or is
+  # still queued/running. A skipped gate does not reach mark-running, so it
+  # does not write the "scan in progress" status.json banner.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Skip if a scrape already covered today
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" != "schedule" ]]; then
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+            echo "workflow_dispatch always scrapes."
+            exit 0
+          fi
+          gh run list --workflow scrape.yml --limit 40 \
+            --json databaseId,status,conclusion,event,createdAt,headBranch \
+            > "${RUNNER_TEMP}/runs.json"
+          skip="$(python -m scrape.schedule_gate \
+            --event "${EVENT_NAME}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --branch "${GITHUB_REF_NAME}" \
+            --runs-file "${RUNNER_TEMP}/runs.json")"
+          echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
+          if [[ "${skip}" == "true" ]]; then
+            echo "A scrape already succeeded or is still queued/running today in Israel. Skipping."
+          else
+            echo "No covering scrape yet today. Continuing."
+          fi
+
   test:
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
