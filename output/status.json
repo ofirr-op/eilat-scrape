@@ -1,35 +1,35 @@
 {
-  "run_state": "idle",
-  "started_at": "2026-10-30T08:52:14Z",
-  "finished_at": "2026-10-30T09:36:46Z",
+  "run_state": "running",
+  "started_at": "2026-10-31T10:55:24Z",
+  "finished_at": null,
   "error": null,
-  "note": "(סריקה ידנית)",
+  "note": "",
   "grids": {
     "2a3c": {
-      "state": "done",
-      "started_at": "2026-10-30T08:52:14Z",
-      "finished_at": "2026-10-30T09:36:46Z",
+      "state": "running",
+      "started_at": "2026-10-31T10:55:24Z",
+      "finished_at": null,
       "error": null,
       "last_scan_at": "2026-10-30T09:36:46Z"
     },
     "2a3c-mhot": {
-      "state": "done",
-      "started_at": "2026-10-30T08:52:14Z",
-      "finished_at": "2026-10-30T09:36:46Z",
+      "state": "running",
+      "started_at": "2026-10-31T10:55:24Z",
+      "finished_at": null,
       "error": null,
       "last_scan_at": "2026-10-30T09:36:46Z"
     },
     "4a1c": {
-      "state": "done",
-      "started_at": "2026-10-30T08:52:14Z",
-      "finished_at": "2026-10-30T09:36:46Z",
+      "state": "running",
+      "started_at": "2026-10-31T10:55:24Z",
+      "finished_at": null,
       "error": null,
       "last_scan_at": "2026-10-30T09:36:46Z"
     },
     "4a1c-mhot": {
-      "state": "done",
-      "started_at": "2026-10-30T08:52:14Z",
-      "finished_at": "2026-10-30T09:36:46Z",
+      "state": "running",
+      "started_at": "2026-10-31T10:55:24Z",
+      "finished_at": null,
       "error": null,
       "last_scan_at": "2026-10-30T09:36:46Z"
     }
