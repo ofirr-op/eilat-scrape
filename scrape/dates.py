@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import calendar
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+ISRAEL = ZoneInfo("Asia/Jerusalem")
 
 
 def add_months(day: date, months: int) -> date:
@@ -16,17 +19,42 @@ def add_months(day: date, months: int) -> date:
     return date(year, month, min(day.day, last))
 
 
-def checkin_dates(start: date, months: int) -> list[date]:
-    """Every check-in from `start` through `start` plus `months` (inclusive)."""
+def israel_today(now: datetime | None = None) -> date:
+    """Today's date in Israel. GitHub runners are UTC, so the clock is converted."""
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(ISRAEL).date()
+
+
+def horizon_end(start: date, months: int) -> date:
+    """Last check-in: the end of the month that contains ``start`` plus ``months``.
+
+    ``start`` plus six months on 11 Nov is 11 May. The scan continues through
+    31 May so that month is complete on the calendar.
+    """
     if months < 1:
         raise ValueError("months must be at least 1")
-    end = add_months(start, months)
+    shifted = add_months(start, months)
+    last = calendar.monthrange(shifted.year, shifted.month)[1]
+    return date(shifted.year, shifted.month, last)
+
+
+def dates_through(start: date, end: date) -> list[date]:
+    """Every date from ``start`` through ``end``, inclusive."""
+    if end < start:
+        raise ValueError("end is before start")
     days: list[date] = []
     cursor = start
     while cursor <= end:
         days.append(cursor)
         cursor += timedelta(days=1)
     return days
+
+
+def checkin_dates(start: date, months: int) -> list[date]:
+    """Every check-in from ``start`` through the end of the month ``months`` ahead."""
+    return dates_through(start, horizon_end(start, months))
 
 
 def sample_dates(days: list[date], limit: int) -> list[date]:

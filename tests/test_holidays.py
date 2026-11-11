@@ -63,6 +63,14 @@ class HolidayDateTests(unittest.TestCase):
         for required in ("ראש השנה", "יום כיפור", "סוכות", "חנוכה", "פורים", "פסח", "שבועות", "תשעה באב"):
             self.assertIn(required, names)
 
+    def test_six_month_horizon_includes_pesach_and_the_rest_of_may(self):
+        # 11 Nov 2026 through the end of the month six months ahead (May 2027).
+        days = holidays_between(date(2026, 11, 11), date(2027, 5, 31))
+        self.assertEqual(days["2026-12-05"]["name"], "חנוכה")
+        self.assertEqual(days["2027-04-22"]["name"], "פסח")
+        self.assertEqual(days["2027-05-12"]["name"], "יום העצמאות")
+        self.assertNotIn("2027-06-11", days)
+
     def test_build_document_includes_hanukkah_when_december_is_on_the_calendar(self):
         document = build_document(ROOT)
         months = {month["key"] for month in document["months"]}

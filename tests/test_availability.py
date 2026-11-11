@@ -62,7 +62,9 @@ class AvailabilityParseTests(unittest.TestCase):
         self.assertEqual([entry.day for entry in calendar], [open_day, closed_day, arrival_day, last])
         window = [open_day, closed_day, arrival_day, last, date(2026, 10, 31), date(2026, 11, 1)]
         kept, closed = apply_arrival_calendar(window, calendar)
-        self.assertEqual(kept, [open_day, closed_day, arrival_day, last])
+        self.assertEqual(kept, window)
+        self.assertNotIn(date(2026, 10, 31), closed)
+        self.assertNotIn(date(2026, 11, 1), closed)
         self.assertNotIn(open_day, closed)
         self.assertEqual(closed[closed_day], "calendar: not available")
         self.assertEqual(closed[arrival_day], "calendar: closed to arrival")
@@ -74,7 +76,7 @@ class AvailabilityParseTests(unittest.TestCase):
         calendar = parse_availability_body(json.dumps([_row(first), _row(last)]))
         assert calendar is not None
         kept, closed = apply_arrival_calendar([first, date(2026, 12, 2), last, date(2026, 12, 4)], calendar)
-        self.assertEqual(kept, [first, date(2026, 12, 2), last])
+        self.assertEqual(kept, [first, date(2026, 12, 2), last, date(2026, 12, 4)])
         self.assertEqual(closed, {})
 
     def test_unusable_body_is_not_a_calendar(self):

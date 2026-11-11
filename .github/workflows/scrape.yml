@@ -199,7 +199,10 @@ jobs:
   scrape:
     needs: test
     runs-on: ubuntu-latest
-    # A grid is about an hour. 330 minutes stays under the 6-hour job cap.
+    # A grid is about 30–55 minutes on the old ~4-month calendar and about
+    # 70–100 minutes once check-ins run from today through the end of the
+    # month six months ahead. The four grids run in parallel. 330 minutes
+    # stays under the 6-hour job cap.
     timeout-minutes: 330
     strategy:
       fail-fast: false

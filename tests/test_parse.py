@@ -1,8 +1,8 @@
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-from scrape.dates import add_months, checkin_dates, classify_party, sample_dates
+from scrape.dates import add_months, checkin_dates, classify_party, israel_today, sample_dates
 from scrape.parse import Offer, best_assignment, cheapest_offer, is_cloudflare_block, parse_rooms_html
 from scrape.party import candidate_splits, combo_output_dir, occupancy_for, selected_parties, selected_promos
 from scrape.search import Combination, rooms_url
@@ -49,12 +49,21 @@ class ParseTests(unittest.TestCase):
 
 
 class DateTests(unittest.TestCase):
-    def test_six_month_window_is_inclusive(self):
-        start = date(2026, 10, 24)
+    def test_six_month_window_runs_through_the_end_of_the_last_month(self):
+        start = date(2026, 11, 11)
         days = checkin_dates(start, 6)
         self.assertEqual(days[0], start)
-        self.assertEqual(days[-1], date(2027, 4, 24))
+        # 11 Nov plus six months is 11 May; the scan keeps the rest of May.
+        self.assertEqual(days[-1], date(2027, 5, 31))
         self.assertEqual(len(days), (days[-1] - days[0]).days + 1)
+        self.assertIn(date(2027, 4, 22), days)
+
+    def test_israel_today_uses_the_jerusalem_date(self):
+        # 22:30 UTC is already the next morning in Israel in winter (UTC+2).
+        late = datetime(2026, 11, 11, 22, 30, tzinfo=timezone.utc)
+        self.assertEqual(israel_today(late), date(2026, 11, 12))
+        morning = datetime(2026, 11, 11, 5, 17, tzinfo=timezone.utc)
+        self.assertEqual(israel_today(morning), date(2026, 11, 11))
 
     def test_add_months_clamps_short_months(self):
         self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))

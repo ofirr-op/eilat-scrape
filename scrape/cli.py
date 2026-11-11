@@ -5,11 +5,11 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from scrape.availability import apply_arrival_calendar, fetch_arrival_calendar
-from scrape.dates import checkin_dates, sample_dates
+from scrape.dates import checkin_dates, israel_today, sample_dates
 from scrape.history import append_document
 from scrape.http_client import Client
 from scrape.parse import best_assignment
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    start = date.today() + timedelta(days=1)
+    start = israel_today()
     days = checkin_dates(start, args.months)
     client = Client(
         cache_dir=Path(args.cache_dir),
@@ -57,17 +57,16 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_avail_precheck:
         calendar = fetch_arrival_calendar(client, hotel=args.hotel, lang=args.lang)
         if calendar:
-            before = len(days)
             last = max(entry.day for entry in calendar)
             days, closed = apply_arrival_calendar(days, calendar)
-            dropped = before - len(days)
+            beyond = sum(1 for day in days if day > last)
             days = sample_dates(days, args.max_dates)
             kept = set(days)
             closed = {day: reason for day, reason in closed.items() if day in kept}
             print(
                 f"Availability calendar: {len(calendar)} days through {last.isoformat()}; "
                 f"skipping {len(closed)} closed check-ins; "
-                f"not crawling {dropped} dates after {last.isoformat()}.",
+                f"still fetching {beyond} check-ins after {last.isoformat()}.",
                 flush=True,
             )
         else:
@@ -339,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
             "and one or two rooms, for each configured party and promo, from BE_Rooms.aspx."
         ),
     )
-    parser.add_argument("--months", type=int, default=6, help="How many months ahead to search (default: 6). Check-in runs from tomorrow through that date.")
+    parser.add_argument("--months", type=int, default=6, help="How many months ahead to search (default: 6). Check-in runs from today in Israel through the end of that month.")
     parser.add_argument("--nights", default="2,3,4", help="Comma-separated stay lengths in nights (default: 2,3,4).")
     parser.add_argument("--rooms", default="1,2", help="Comma-separated room counts, each 1 or 2 (default: 1,2). Two rooms split the party so each room has an adult.")
     parser.add_argument(
@@ -381,9 +380,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Do not POST getAvalibility before crawling. By default one calendar "
-            "request skips check-ins that are closed or closed to arrival, and "
-            "does not crawl past the last date it returns. A failed calendar "
-            "request keeps the full window."
+            "request skips check-ins that are closed or closed to arrival. "
+            "Dates after the calendar's last day are still fetched. A failed "
+            "calendar request keeps the full window."
         ),
     )
     parser.add_argument("--include-club", action="store_true", help="Allow i-club member rates to win. They require a login, so they are excluded by default.")

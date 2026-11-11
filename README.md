@@ -178,7 +178,7 @@ pip install -e .
 
 ## Usage
 
-Full window: every check-in from tomorrow through 6 months, nights 2, 3 and 4, rooms 1 and 2, both parties, both promos. `2a3c` is 9 requests per date per promo (one room, plus two adult splits for two rooms, times three lengths). `4a1c` is 12 (one room, plus three adult splits for two rooms, times three lengths). Both promos are 42 `BE_Rooms.aspx` requests per check-in date before the calendar pre-check.
+Full window: every check-in from today in Israel through the end of the month six months ahead, nights 2, 3 and 4, rooms 1 and 2, both parties, both promos. `2a3c` is 9 requests per date per promo (one room, plus two adult splits for two rooms, times three lengths). `4a1c` is 12 (one room, plus three adult splits for two rooms, times three lengths). Both promos are 42 `BE_Rooms.aspx` requests per check-in date before the calendar pre-check.
 
 ```bash
 python3 -m scrape --output output/eilat --history output/history --refresh
@@ -194,7 +194,7 @@ Useful flags:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--months` | `6` | Check-in from tomorrow through this many months, inclusive |
+| `--months` | `6` | Check-in from today in Israel through the end of the month this many months ahead |
 | `--nights` | `2,3,4` | Stay lengths in nights |
 | `--rooms` | `1,2` | Room counts. `2` splits the party so each room has an adult |
 | `--party` | `2a3c,4a1c` | `2a3c` and/or `4a1c`. Omit it, or pass both, to run every party |
@@ -251,7 +251,7 @@ Prices are the engine's stay total in shekels (`₪`, code `ILS`).
 
 Uncached requests wait `--delay` seconds (default 1.5) plus a short random jitter. Timeouts, a body that ends early (`IncompleteRead`), and HTTP 429/500/502/503/504 are retried with exponential backoff. Successful HTML is stored under `--cache-dir` for `--cache-hours` (default 24), keyed by the booking URL, so a second run inside that window does not hit the site again. Pass `--refresh` to force new requests.
 
-Before the rooms crawl, the default is one POST to `https://m.clubhotels.co.il/BE_EngineService.asmx/getAvalibility` (`Content-Type: application/json; charset=utf-8`, `Referer` and `Origin` `https://m.clubhotels.co.il`, body `hotelID` `1`, `wing` null, `dsn` `""`, `lang` `heb`, `days` 550). Each row's `DayDate` is an ASP.NET `/Date(milliseconds)/` value. A check-in with `IsAvail` false or `CloseToArrival` true is written as `unavailable` for every nights × board × rooms cell, with `reason` beginning `calendar:` and no `BE_Rooms.aspx` request. Its `booking_url` is the first split that would have been fetched, with `&promocode=mhot` only when `promo` is `mhot`. Check-ins after the last calendar day are left out of the crawl and out of the output. `MinDays` and `CloseToDeparture` are not used as skip rules. If the POST fails or the body is not a calendar, nothing is printed and every date in the window is fetched as before. `--no-avail-precheck` skips the POST.
+Before the rooms crawl, the default is one POST to `https://m.clubhotels.co.il/BE_EngineService.asmx/getAvalibility` (`Content-Type: application/json; charset=utf-8`, `Referer` and `Origin` `https://m.clubhotels.co.il`, body `hotelID` `1`, `wing` null, `dsn` `""`, `lang` `heb`, `days` 550). Each row's `DayDate` is an ASP.NET `/Date(milliseconds)/` value. A check-in with `IsAvail` false or `CloseToArrival` true is written as `unavailable` for every nights × board × rooms cell, with `reason` beginning `calendar:` and no `BE_Rooms.aspx` request. Its `booking_url` is the first split that would have been fetched, with `&promocode=mhot` only when `promo` is `mhot`. Check-ins after the last calendar day stay in the window and are still fetched, so the scan reaches six months even when the hotel calendar is shorter. `MinDays` and `CloseToDeparture` are not used as skip rules. If the POST fails or the body is not a calendar, nothing is printed and every date in the window is fetched as before. `--no-avail-precheck` skips the POST.
 
 On 2026-10-26 that calendar was 139 days, 2026-10-26 through 2027-03-13 (23 of them `IsAvail` false, `CloseToArrival` false on every row, `MinDays` 1 on every row). The six-month window was 183 check-ins, 2026-10-27 through 2027-04-27. 23 of those were closed and 45 were after 2027-03-13. Both sets had no available price in the finished grids. A four-grid run is 42 rooms requests per check-in, so skipping those 68 dates removes 2,856 of 7,686 requests (about 37%), plus the one calendar POST. The run still fetches dates the calendar calls open when the party or the stay length does not fit.
 

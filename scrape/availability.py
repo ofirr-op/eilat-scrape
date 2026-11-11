@@ -3,7 +3,9 @@
 The endpoint returns one row per day (open, closed, minimum stay, closed to
 arrival or departure). It does not return prices. A check-in is skipped when
 ``IsAvail`` is false or ``CloseToArrival`` is true. Check-ins after the last
-row are not crawled. Any failure leaves the caller on the full date window.
+row stay in the window and are still fetched: the hotel calendar is often
+shorter than the six-month scan. Any failure leaves the caller on the full
+date window.
 """
 
 from __future__ import annotations
@@ -101,16 +103,15 @@ def apply_arrival_calendar(
     days: list[date],
     calendar: list[CalendarDay],
 ) -> tuple[list[date], dict[date, str]]:
-    """Drop check-ins after the calendar and mark closed arrival dates.
+    """Mark closed arrival dates. Keep every check-in in ``days``.
 
-    A date on or before the last calendar day that the payload does not
-    mention is kept and is not marked closed, so it is still fetched.
+    A date the payload does not mention, including dates after the last
+    calendar day, is kept and is not marked closed, so it is still fetched.
     """
     if not calendar:
         return list(days), {}
     by_day = {entry.day: entry for entry in calendar}
-    last = max(by_day)
-    kept = [day for day in days if day <= last]
+    kept = list(days)
     closed = {
         day: by_day[day].reason()
         for day in kept
