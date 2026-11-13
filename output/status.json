@@ -1,37 +1,37 @@
 {
-  "run_state": "running",
+  "run_state": "idle",
   "started_at": "2026-11-13T13:06:03Z",
-  "finished_at": null,
+  "finished_at": "2026-11-13T13:48:53Z",
   "error": null,
   "note": "",
   "grids": {
     "2a3c": {
-      "state": "running",
+      "state": "done",
       "started_at": "2026-11-13T13:06:03Z",
-      "finished_at": null,
+      "finished_at": "2026-11-13T13:48:53Z",
       "error": null,
-      "last_scan_at": "2026-11-12T14:34:10Z"
+      "last_scan_at": "2026-11-13T13:48:53Z"
     },
     "2a3c-mhot": {
-      "state": "running",
+      "state": "done",
       "started_at": "2026-11-13T13:06:03Z",
-      "finished_at": null,
+      "finished_at": "2026-11-13T13:48:53Z",
       "error": null,
-      "last_scan_at": "2026-11-12T14:34:10Z"
+      "last_scan_at": "2026-11-13T13:48:53Z"
     },
     "4a1c": {
-      "state": "running",
+      "state": "done",
       "started_at": "2026-11-13T13:06:03Z",
-      "finished_at": null,
+      "finished_at": "2026-11-13T13:48:53Z",
       "error": null,
-      "last_scan_at": "2026-11-12T14:34:10Z"
+      "last_scan_at": "2026-11-13T13:48:53Z"
     },
     "4a1c-mhot": {
-      "state": "running",
+      "state": "done",
       "started_at": "2026-11-13T13:06:03Z",
-      "finished_at": null,
+      "finished_at": "2026-11-13T13:48:53Z",
       "error": null,
-      "last_scan_at": "2026-11-12T14:34:10Z"
+      "last_scan_at": "2026-11-13T13:48:53Z"
     }
   }
 }
