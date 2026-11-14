@@ -14,8 +14,11 @@
 # Four grids run as separate matrix jobs (about an hour each) so none of
 # them approaches the 6-hour job limit. A final job copies their CSV/JSON
 # reports and history snapshots onto main and pushes with GITHUB_TOKEN.
-# No repository secrets are used. --transport auto is the scraper default:
-# direct fetch, then r.jina.ai if Cloudflare blocks the runner IP.
+# Optional TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID send one holiday
+# price-drop summary after that push. A missing secret, a Telegram error,
+# or a gated schedule run does not fail the scrape or the Pages deploy.
+# --transport auto is the scraper default: direct fetch, then r.jina.ai
+# if Cloudflare blocks the runner IP.
 
 name: Scrape Club Hotel Eilat
 
@@ -400,6 +403,7 @@ jobs:
             --grids "$(IFS=,; echo "${grids[*]}")" \
             "${args[@]}"
       - name: Commit and push to main
+        id: commit
         working-directory: main
         run: |
           set -euo pipefail
@@ -408,6 +412,7 @@ jobs:
           git add output
           if git diff --cached --quiet; then
             echo "No output changes to commit"
+            echo "committed=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
           grids="$(find "${GITHUB_WORKSPACE}/artifacts" -mindepth 2 -maxdepth 2 -type d -name files -printf '%h\n' | xargs -n1 basename | sed 's/^grid-//' | sort | paste -sd, -)"
@@ -431,6 +436,7 @@ jobs:
             fi
             if git push origin HEAD:main; then
               echo "Pushed price update to main"
+              echo "committed=true" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
             echo "Push rejected on attempt ${attempt}; retrying after rebase"
@@ -454,6 +460,40 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: _site
+      # Only the history files this push added. A gated run never gets here,
+      # and a run that did not commit does not send. This step is after the
+      # Pages artifact so a Telegram error cannot skip the deploy.
+      - name: Notify Telegram of holiday price drops
+        if: steps.commit.outputs.committed == 'true'
+        continue-on-error: true
+        working-directory: main
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONPATH: ${{ github.workspace }}/workflow-src
+        run: |
+          set +e
+          grids=""
+          while IFS= read -r path; do
+            [[ -n "${path}" ]] || continue
+            base="$(basename "${path}")"
+            case "${base}" in
+              *-4a1c-mhot.csv.gz) grid="4a1c-mhot" ;;
+              *-4a1c.csv.gz) grid="4a1c" ;;
+              *-mhot.csv.gz) grid="2a3c-mhot" ;;
+              *.csv.gz) grid="2a3c" ;;
+              *) continue ;;
+            esac
+            case ",${grids}," in
+              *",${grid},"*) ;;
+              *) grids="${grids:+${grids},}${grid}" ;;
+            esac
+          done < <(git diff-tree --no-commit-id --name-only -r HEAD -- output/history/runs)
+          python -m scrape.telegram_alerts \
+            --root "${GITHUB_WORKSPACE}/main" \
+            --grids "${grids}"
+          echo "Telegram holiday-alert step finished. A send error does not fail this job."
+          exit 0
 
   deploy:
     needs: publish
