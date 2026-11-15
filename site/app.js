@@ -61,22 +61,10 @@
     return block[date][promo];
   }
 
-  function gridId(party, useMhot) {
-    return party + (useMhot ? "-mhot" : "");
-  }
-
   function trend(party, useMhot, s, date) {
-    const scans = (data.scans && data.scans[gridId(party, useMhot)]) || [];
-    if (scans.length < 2) return null;
-    const prevScan = scans[scans.length - 2];
-    const lastScan = scans[scans.length - 1];
-    const series = points(s, date, useMhot ? "mhot" : "none");
-    const prev = series.find((p) => p.at === prevScan.at);
-    const last = series.find((p) => p.at === lastScan.at);
-    if (!prev || !last || prev.price == null || last.price == null) return null;
-    const delta = last.price - prev.price;
-    const kind = Math.abs(delta) < 0.5 ? "flat" : delta > 0 ? "up" : "down";
-    return { kind, delta, prevLabel: prevScan.label };
+    const cmp = versusLow(points(s, date, useMhot ? "mhot" : "none"));
+    if (!cmp || cmp.kind === "unavailable") return null;
+    return cmp;
   }
 
   function cheapest(list) {
@@ -295,13 +283,11 @@
       if (row.per_night < lo) lo = row.per_night;
       if (row.per_night > hi) hi = row.per_night;
     }
-    const scans = (data.scans && data.scans[s.party]) || [];
     const legend = '<div class="legend"><span>זול</span>' +
       [0, 0.25, 0.5, 0.75, 1].map((t) => '<span class="swatch" style="background:' + heatColor(t) + '"></span>').join("") +
       "<span>" + (hi > 0 ? "יקר (" + fmt(lo) + " עד " + fmt(hi) + " ₪ ללילה)" : "אין תאריכים זמינים בסינון הזה") + "</span></div>" +
-      '<div class="trend-key"><span>מגמה מול הסריקה הקודמת' +
-      (scans.length >= 2 ? " (" + scans[scans.length - 2].label + " ל־" + scans[scans.length - 1].label + ")" : "") +
-      ':</span><span class="up">▲ עלה</span><span class="down">▼ ירד</span><span class="flat">▬ יציב</span></div>' +
+      '<div class="trend-key"><span>מול המחיר הנמוך ביותר שנרשם לאותו יום ולאותו קו:</span>' +
+      '<span class="up">▲ יקר יותר</span><span class="flat">▬ זה המחיר הנמוך ביותר</span></div>' +
       '<p class="hint">בכל יום מוצג המחיר הזול מבין הרגיל ועם קוד mhot. הסימון <span class="mhot">mhot</span> אומר שהקוד זול יותר והקישור נפתח איתו. במחשב, העבירו את העכבר מעל יום כדי לראות את ההיסטוריה. בטלפון, לחיצה ארוכה פותחת את ההיסטוריה בלי לעבור לאתר, והקשה רגילה פותחת את ההזמנה. ימים עם מסגרת מקווקוו אינם זמינים עכשיו אבל יש להם היסטוריה. כותרת החודש נשארת בראש המסך בזמן הגלילה ואינה מכסה את כרטיס ההיסטוריה.</p>' +
       '<div class="month-jump"><span class="hint">קפיצה לחודש:</span>' +
       data.months.map((month) => '<button type="button" data-jump="' + month.key + '">' + month.name + "</button>").join("") +
@@ -362,7 +348,9 @@
     const t = hi === lo ? 0 : (offer.per_night - lo) / (hi - lo);
     const color = heatColor(t);
     const tr = trend(s.party, offer.use_mhot, s, date);
-    const mark = tr ? '<span class="' + tr.kind + '">' + (tr.kind === "up" ? "▲" : tr.kind === "down" ? "▼" : "▬") + "</span>" : "";
+    const mark = tr ? '<span class="' + tr.kind + '" title="' + escapeText(formatVersusLow(
+      points(s, date, offer.use_mhot ? "mhot" : "none")
+    )) + '">' + (tr.kind === "up" ? "▲" : "▬") + "</span>" : "";
     return '<a class="day' + klass + '" data-date="' + date + '" href="' + offer.url + '" target="_blank" rel="noopener noreferrer" style="background:' +
       color + '22;border-bottom:3px solid ' + color + '"><span class="top"><span>' + day + "</span>" + mark +
       '</span><span class="price' + (offer.use_mhot ? " mhot" : "") + '">' + fmt(offer.per_night) + " ₪" +
@@ -469,14 +457,8 @@
     html += chartSvg(none, mhot, avail);
     html += '<div class="chart-key"><span><span class="dot" style="background:' + BLUE + '"></span>כחול = מחיר רגיל</span>' +
       '<span><span class="dot" style="background:' + RED + '"></span>אדום = עם קוד mhot</span></div>';
-    html += "<div>" + changeText(none) + "</div>";
-    html += "<div>" + mhotText(mhot) + "</div>";
-    const tr = offer ? trend(s.party, offer.use_mhot, s, date) : trend(s.party, false, s, date);
-    if (tr) {
-      const sign = tr.kind === "flat" ? "ללא שינוי (0 ₪)" : (tr.kind === "up" ? "+" : "−") + fmt(Math.abs(tr.delta)) + " ₪";
-      html += '<div class="' + tr.kind + '"><strong>' + (tr.kind === "up" ? "▲ " : tr.kind === "down" ? "▼ " : "▬ ") +
-        (offer && offer.use_mhot ? "עם קוד, " : "") + "מהסריקה הקודמת (" + tr.prevLabel + "): " + sign + "</strong></div>";
-    }
+    html += "<div>" + lineDelta("מחיר רגיל", none) + "</div>";
+    html += '<div class="mhot">' + lineDelta("עם קוד mhot", mhot) + "</div>";
     if (both.some((p) => p.price == null)) html += '<div class="hint">עיגול ריק בתחתית הגרף = לא זמין באותה סריקה.</div>';
     return html;
   }
@@ -488,31 +470,9 @@
       "להזמנה באתר מועדון הוטלס – " + fmt(offer.total) + " ₪ (" + which + ")</a>";
   }
 
-  function changeText(none) {
-    const avail = none.filter((p) => p.price != null);
-    if (!avail.length) return "אין עדיין מחיר רגיל להשוואה.";
-    const first = avail[0];
-    const last = none[none.length - 1];
-    if (last.price == null) return "בסריקה האחרונה (" + last.label + ") לא זמין. המחיר האחרון שנצפה: " + fmt(avail[avail.length - 1].price) + " ₪.";
-    if (last.at === first.at) return "זו הסריקה הראשונה שבה התאריך זמין, אין עדיין שינוי להשוות.";
-    const delta = last.price - first.price;
-    if (delta === 0) return "שינוי מהסריקה הראשונה (" + first.label + "): ללא שינוי.";
-    const pct = (Math.abs(delta) / first.price) * 100;
-    return "שינוי מהסריקה הראשונה (" + first.label + "): " + (delta > 0 ? "+" : "−") + fmt(Math.abs(delta)) +
-      " ₪ (" + (delta > 0 ? "+" : "−") + pct.toFixed(1) + "%).";
-  }
-
-  function mhotText(mhot) {
-    const avail = mhot.filter((p) => p.price != null);
-    if (!mhot.length) return "עם קוד mhot: אין עדיין מדידה לתאריך הזה.";
-    const last = mhot[mhot.length - 1];
-    let min = null;
-    for (const point of avail) if (!min || point.price < min.price) min = point;
-    if (mhot.length === 1) {
-      return "עם קוד mhot: " + (last.price == null ? "לא זמין" : fmt(last.price) + " ₪") + " (נמדד פעם אחת, " + last.label + ").";
-    }
-    return "עם קוד mhot: " + (last.price == null ? "לא זמין" : fmt(last.price) + " ₪") + " (" + last.label + ")" +
-      (min ? ", הכי זול עד עכשיו: " + fmt(min.price) + " ₪ (" + min.label + ")" : "") + ".";
+  function lineDelta(label, series) {
+    if (!series.length) return label + ": אין עדיין מדידה לתאריך הזה.";
+    return label + ": " + formatVersusLow(series);
   }
 
   function chartSvg(none, mhot, avail) {
