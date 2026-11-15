@@ -4,7 +4,7 @@ Find Club Hotel Eilat prices for 2, 3 and 4 nights, each board basis, and one or
 
 ## GitHub Actions / הרצה ב-GitHub Actions
 
-This repo runs itself on GitHub Actions (`.github/workflows/scrape.yml`). No extra secrets: the workflow uses `GITHUB_TOKEN` only. Each grid is its own job, so a full day stays inside the per-job time limit. A last job merges the finished files and pushes them to `main`.
+This repo runs itself on GitHub Actions (`.github/workflows/scrape.yml`). The scrape uses `GITHUB_TOKEN` only. Telegram alerts are optional and are skipped when their secrets are absent. Each grid is its own job, so a full day stays inside the per-job time limit. A last job merges the finished files and pushes them to `main`.
 
 **Schedule.** The primary cron is `17 5 * * *` UTC: **07:17 Israel Standard Time** (winter, UTC+2), and **08:17** during Israel Daylight Time (summer, UTC+3). The minute is not 0, because GitHub often drops a schedule that fires at the top of the hour. If that run did not succeed, two backups try later the same day: `43 8 * * *` UTC (**10:43** winter / **11:43** summer) and `29 11 * * *` UTC (**13:29** winter / **14:29** summer). A backup does not scrape when a run on `main` already succeeded, or is still queued or running, on today's Israel date. A manual run always scrapes. GitHub cron is UTC only and does not move with daylight saving time.
 
@@ -20,7 +20,7 @@ This repo runs itself on GitHub Actions (`.github/workflows/scrape.yml`). No ext
 
 Each directory receives `results.csv`, `results.json`, `offers.csv`, and `report.html`. One gzipped history snapshot per grid is added under `output/history/runs/`.
 
-המאגר מריץ את עצמו ב-GitHub Actions (`.github/workflows/scrape.yml`). אין סודות נוספים: ה-workflow משתמש רק ב-`GITHUB_TOKEN`. כל רשת רצה כ-job נפרד, ועבודה אחרונה מאחדת את הקבצים ודוחפת אותם ל-`main`.
+המאגר מריץ את עצמו ב-GitHub Actions (`.github/workflows/scrape.yml`). הסריקה עצמה משתמשת רק ב-`GITHUB_TOKEN`. התראות טלגרם הן רשות, ובלי הסודות שלהן לא נשלח כלום. כל רשת רצה כ-job נפרד, ועבודה אחרונה מאחדת את הקבצים ודוחפת אותם ל-`main`.
 
 **לוח זמנים.** ה-cron הראשי הוא `17 5 * * *` לפי UTC: **07:17** שעון ישראל בחורף (UTC+2), ו־**08:17** בשעון קיץ (UTC+3). הדקה אינה 0, כי GitHub לפעמים מדלג על תזמון שנופל בדיוק בראש השעה. אם הריצה הזו לא הצליחה, יש שני גיבויים באותו יום: `43 8 * * *` UTC (**10:43** בחורף / **11:43** בקיץ) ו־`29 11 * * *` UTC (**13:29** בחורף / **14:29** בקיץ). גיבוי לא סורק אם ב־`main` כבר יש ריצה שהצליחה, או שהיא עדיין בתור או רצה, לפי התאריך של היום בשעון ישראל. הרצה ידנית תמיד סורקת. ה-cron של GitHub הוא UTC בלבד ולא זז עם שעון הקיץ.
 
@@ -45,6 +45,18 @@ GitHub Pages has to be switched on once: **Settings → Pages → Build and depl
 אותו workflow מפרסם עמוד בעברית, מותאם לטלפון, בכתובת <https://ofirr-op.github.io/eilat-scrape/>. אחרי שהתוצאות נשמרות הוא בונה את `site/` מ־`output/history/runs/*.csv.gz` ומקבצי התוצאות, ומפרסם ל־GitHub Pages. בתחילת ריצה נשמר `output/status.json` (מצב `running`, עם `started_at` והרשתות של הריצה) כדי שהעמוד יראה שסריקה רצה. רשת שנכשלה שומרת את טקסט השגיאה מהלוג.
 
 צריך להפעיל את GitHub Pages פעם אחת: **Settings → Pages → Build and deployment → Source: GitHub Actions**. הטוקן של ה-workflow לא יכול לשנות את ההגדרה הזו.
+
+## התראות טלגרם / Telegram holiday alerts
+
+אחרי סריקה שהצליחה ונדחפה ל־`main`, אם מחיר של תאריך שמסומן בלוח ירד לעומת הסריקה הקודמת של אותו הרכב ואותו קו (רגיל או `mhot`), נשלחת הודעה אחת לערוץ. נכלל כל תאריך שמסומן בלוח: חג (`chag`), חול המועד (`chol`), ערב חג (`erev`), חגים קטנים (`minor`, למשל חנוכה ופורים), וגם הימים המודרניים שכבר מסומנים (יום השואה, יום הזיכרון, יום העצמאות, יום ירושלים). אם אין ירידה, לא נשלח כלום. ריצה שדולגה כי כבר הייתה סריקה היום לא מגיעה לשלב הזה ולא שולחת. בלי שני הסודות מופיעה שורת לוג, והסריקה ועמוד המחירים ממשיכים.
+
+הגדרה:
+
+1. בטלגרם פותחים שיחה עם [@BotFather](https://t.me/BotFather), שולחים `/newbot`, ובוחרים שם לבוט. מעתיקים את הטוקן.
+2. יוצרים את הערוץ **קלבוטל דילים** (או פותחים אותו) ומוסיפים את הבוט כמנהל, עם הרשאה לפרסם הודעות. לערוץ ציבורי `TELEGRAM_CHAT_ID` הוא שם המשתמש עם `@`. לערוץ פרטי זה המזהה שמתחיל ב־`-100`.
+3. ב־GitHub: **Settings → Secrets and variables → Actions → New repository secret**. מוסיפים `TELEGRAM_BOT_TOKEN` (הטוקן) ו־`TELEGRAM_CHAT_ID` (`@username` או `-100…`).
+
+After a successful scrape, one Hebrew message is sent when a displayed price fell, since the previous scan, on a date the calendar marks. The scan and the Pages deploy still succeed when the secrets are missing or Telegram returns an error. A gated backup run does not send.
 
 The marketing page at <https://m.clubhotels.co.il/club-hotel-eilat?r=1> does not contain prices. Its booking widget (`Scripts/EngineScriptsV2/BE_Engine.min.js`) submits a search to the ASP.NET page the engine calls **RoomsPage**:
 
