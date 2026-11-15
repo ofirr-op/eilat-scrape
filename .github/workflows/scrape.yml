@@ -135,15 +135,13 @@ jobs:
   # Commit a running status before the grids finish, so the Pages site can
   # show the scan in progress. pages.yml deploys that commit. This job does
   # not cancel or wait on a scrape that is already running.
+  # site_data comes from the main checkout, not the SHA this run was queued
+  # on. A schedule often starts hours later, after main has moved.
   mark-running:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout the workflow commit
-        uses: actions/checkout@v7
-        with:
-          path: workflow-src
       - name: Checkout main
         uses: actions/checkout@v7
         with:
@@ -163,7 +161,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             note="(סריקה ידנית)"
           fi
-          PYTHONPATH="${GITHUB_WORKSPACE}/workflow-src" python -m scrape.site_data mark-running \
+          PYTHONPATH="${GITHUB_WORKSPACE}/main" python -m scrape.site_data mark-running \
             --status "${GITHUB_WORKSPACE}/main/output/status.json" \
             --started-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --grids "${grids}" \
@@ -293,9 +291,12 @@ jobs:
       needs.test.result == 'success' &&
       (needs.scrape.result == 'success' || needs.scrape.result == 'failure')
     steps:
-      # The running commit supplies publish-grids.sh. main is a second
-      # checkout so the price commit is based on main even when this
-      # workflow was dispatched from another branch.
+      # publish-grids.sh stays on the workflow commit: it unpacks the
+      # artifacts this run's scrape jobs wrote. The price page and the
+      # Telegram script come from the main checkout below. That checkout is
+      # ref: main when this job starts, then the commit step rebases onto
+      # origin/main, so a run queued hours earlier cannot deploy stale site
+      # code over a page that has since landed on main.
       - name: Checkout the workflow commit
         uses: actions/checkout@v7
         with:
@@ -339,9 +340,9 @@ jobs:
           name: grid-4a1c-mhot
           path: artifacts/grid-4a1c-mhot
       - name: Merge grids into the checkout
-        # Publish checks out main, which may not yet contain this script
-        # when the workflow is dispatched from another branch. The script
-        # is taken from the commit that is running.
+        # This script stays on the queued commit. It has to match the
+        # artifacts the scrape jobs in this run uploaded. The page itself
+        # is packaged later from main.
         run: |
           set -euo pipefail
           script="${GITHUB_WORKSPACE}/workflow-src/.github/scripts/publish-grids.sh"
@@ -397,7 +398,7 @@ jobs:
             fi
             args+=(--failed "${grid}=${reason}")
           done
-          PYTHONPATH="${GITHUB_WORKSPACE}/workflow-src" python -m scrape.site_data mark-finished \
+          PYTHONPATH="${GITHUB_WORKSPACE}/main" python -m scrape.site_data mark-finished \
             --status "${GITHUB_WORKSPACE}/main/output/status.json" \
             --finished-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --grids "$(IFS=,; echo "${grids[*]}")" \
@@ -447,15 +448,27 @@ jobs:
       - name: Build the price page
         run: |
           set -euo pipefail
+          # When this run had nothing new to commit, the checkout is still
+          # the main from the start of this job. Fast-forward so site/ and
+          # scrape/ match origin/main now. A price commit was already
+          # rebased onto origin/main before the push, and the tree is clean,
+          # so this is a no-op in that case.
+          git -C "${GITHUB_WORKSPACE}/main" fetch origin main
+          if [[ -z "$(git -C "${GITHUB_WORKSPACE}/main" status --porcelain)" ]]; then
+            git -C "${GITHUB_WORKSPACE}/main" merge --ff-only origin/main
+          else
+            echo "main checkout has local edits; site/ is the one from the rebase onto origin/main."
+          fi
           rm -rf "${GITHUB_WORKSPACE}/_site"
           mkdir -p "${GITHUB_WORKSPACE}/_site"
-          cp -a "${GITHUB_WORKSPACE}/workflow-src/site/." "${GITHUB_WORKSPACE}/_site/"
+          cp -a "${GITHUB_WORKSPACE}/main/site/." "${GITHUB_WORKSPACE}/_site/"
           rm -f "${GITHUB_WORKSPACE}/_site/data.json"
-          PYTHONPATH="${GITHUB_WORKSPACE}/workflow-src" python -m scrape.site_data build \
+          PYTHONPATH="${GITHUB_WORKSPACE}/main" python -m scrape.site_data build \
             --root "${GITHUB_WORKSPACE}/main" \
             --dest "${GITHUB_WORKSPACE}/_site/data.json"
           test -s "${GITHUB_WORKSPACE}/_site/index.html"
           test -s "${GITHUB_WORKSPACE}/_site/data.json"
+          test -s "${GITHUB_WORKSPACE}/_site/app.js"
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
@@ -470,7 +483,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PYTHONPATH: ${{ github.workspace }}/workflow-src
+          PYTHONPATH: ${{ github.workspace }}/main
         run: |
           set +e
           grids=""
